@@ -20,3 +20,7 @@ npm test
 agy plugin validate . --strict
 agy plugin install .
 ```
+
+## Contributors
+
+Developed and maintained by **Vit129** and **Antigravity** (Google).
