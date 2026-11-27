@@ -1,0 +1,52 @@
+.gitignore
+  h_d82339d8725694 1-3
+README.md
+  h_d82339d8725694 1-22
+hooks.json
+  h_d82339d8725694 1-18
+mcp_config.json
+  h_d82339d8725694 1-11
+package.json
+  h_d82339d8725694 1-15
+plugin.json
+  h_d82339d8725694 1-9
+rules/AGENTS.md
+  h_d82339d8725694 1-6
+scripts/ask-claude-mcp.mjs
+  h_d82339d8725694 1-137
+scripts/claude-companion.mjs
+  h_d82339d8725694 1-629
+scripts/lib/claude.mjs
+  h_d82339d8725694 1-195
+scripts/lib/handoff.mjs
+  h_d82339d8725694 1-143
+scripts/lib/quota-state.mjs
+  h_d82339d8725694 1-217
+scripts/lib/state.mjs
+  h_d82339d8725694 1-230
+scripts/quota-hook.mjs
+  h_d82339d8725694 1-85
+skills/claude-ask/SKILL.md
+  h_d82339d8725694 1-17
+skills/claude-handoff/SKILL.md
+  h_d82339d8725694 1-18
+skills/claude-status/SKILL.md
+  h_d82339d8725694 1-16
+skills/claude-transfer/SKILL.md
+  h_d82339d8725694 1-13
+tests/claude-companion.test.mjs
+  h_d82339d8725694 1-121
+tests/handoff-and-jobs.test.mjs
+  h_d82339d8725694 1-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0173ca647d8492f8cac951e2397ab8a9f5ff530a",
+  "prompts": {},
+  "humans": {
+    "h_d82339d8725694": {
+      "author": "Vit129 <vitosk129@gmail.com>"
+    }
+  }
+}
