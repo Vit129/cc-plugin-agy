@@ -1,0 +1,20 @@
+scripts/ask-claude-mcp.mjs
+  h_d82339d8725694 4,67-73,76-77,99-106
+scripts/claude-companion.mjs
+  h_d82339d8725694 8,192-196,207-211,225-228,468-474,477-479,510-516,520-522,565-571,585-587
+scripts/lib/claude.mjs
+  h_d82339d8725694 12-47
+tests/claude-companion.test.mjs
+  h_d82339d8725694 8,122-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0ab543a454b87fc0e38ac3f4db37542466048336",
+  "prompts": {},
+  "humans": {
+    "h_d82339d8725694": {
+      "author": "Vit129 <vitosk129@gmail.com>"
+    }
+  }
+}
