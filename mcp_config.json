@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "cc-plugin-agy": {
+    "claude": {
       "command": "sh",
       "args": [
         "-c",
