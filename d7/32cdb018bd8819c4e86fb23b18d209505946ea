@@ -1,0 +1,19 @@
+hooks.json
+  s_d767ea7fa79a08::t_eb093ca913d53e 17-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d732cdb018bd8819c4e86fb23b18d209505946ea",
+  "prompts": {},
+  "sessions": {
+    "s_d767ea7fa79a08": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a21d2c-e72c-7031-8708-fa3c1feeb0dc",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "Vit129 <vitosk129@gmail.com>"
+    }
+  }
+}
