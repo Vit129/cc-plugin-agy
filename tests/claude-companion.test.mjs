@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildClaudeArgs, parseClaudeJsonOutput, RECURSION_GUARD_ENV, runClaudePrompt } from "../scripts/lib/claude.mjs";
+import { buildClaudeArgs, parseClaudeJsonOutput, RECURSION_GUARD_ENV, runClaudePrompt, selectClaudeModel } from "../scripts/lib/claude.mjs";
 import { handlePreInvocation, handleStop } from "../scripts/quota-hook.mjs";
 import { readAllQuota } from "../scripts/lib/quota-state.mjs";
 
@@ -118,4 +118,35 @@ test("ask-claude-mcp responds to initialize and tools/list including resume and 
   assert.equal(tool.name, "ask_claude");
   assert.ok(tool.inputSchema.properties.resume);
   assert.ok(tool.inputSchema.properties.persist);
+});
+
+test("selectClaudeModel picks by task size when model is omitted and respects explicit/env overrides", () => {
+  assert.deepEqual(selectClaudeModel({ kind: "ask", promptLength: 100 }), {
+    model: "haiku",
+    effort: "low",
+    tier: "small",
+    auto: true
+  });
+  assert.deepEqual(selectClaudeModel({ kind: "review", promptLength: 3000 }), {
+    model: "sonnet",
+    effort: "medium",
+    tier: "medium",
+    auto: true
+  });
+  assert.deepEqual(selectClaudeModel({ kind: "adversarial-review", promptLength: 500 }), {
+    model: "opus",
+    effort: "high",
+    tier: "large",
+    auto: true
+  });
+  assert.deepEqual(selectClaudeModel({ kind: "ask", promptLength: 100, model: "sonnet" }), {
+    model: "sonnet",
+    effort: null,
+    tier: "explicit",
+    auto: false
+  });
+  assert.equal(
+    selectClaudeModel({ kind: "ask", promptLength: 100, env: { CC_MODEL_SMALL: "claude-haiku-custom" } }).model,
+    "claude-haiku-custom"
+  );
 });

@@ -9,6 +9,42 @@ import { classifyQuotaError, recordCooldown } from "./quota-state.mjs";
 export const RECURSION_GUARD_ENV = "CC_PLUGIN_AGY_ACTIVE";
 const DEFAULT_READONLY_TOOLS = "Read,Grep,Glob";
 
+export function selectClaudeModel({
+  kind = "ask",
+  promptLength = 0,
+  deep = false,
+  edit = false,
+  model = null,
+  effort = null,
+  env = process.env
+} = {}) {
+  if (model) {
+    return { model, effort: effort ?? null, tier: "explicit", auto: false };
+  }
+  if (kind === "adversarial-review" || deep || promptLength > 10_000) {
+    return {
+      model: env.CC_MODEL_LARGE || "opus",
+      effort: effort ?? "high",
+      tier: "large",
+      auto: true
+    };
+  }
+  if (kind === "ask" && !edit && promptLength < 2_000) {
+    return {
+      model: env.CC_MODEL_SMALL || "haiku",
+      effort: effort ?? "low",
+      tier: "small",
+      auto: true
+    };
+  }
+  return {
+    model: env.CC_MODEL_MEDIUM || "sonnet",
+    effort: effort ?? "medium",
+    tier: "medium",
+    auto: true
+  };
+}
+
 export function resolveClaudeBinary(env = process.env) {
   if (env.CLAUDE_BIN) return env.CLAUDE_BIN;
   const candidates = [

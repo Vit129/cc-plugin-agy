@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { runClaudeAvailability, runClaudePrompt } from "./lib/claude.mjs";
+import { runClaudeAvailability, runClaudePrompt, selectClaudeModel } from "./lib/claude.mjs";
 import {
   detectVerifyCommand,
   hashFiles,
@@ -189,6 +189,11 @@ function enqueueBackground(workspaceRoot, kind, requestPayload, options) {
   }
 }
 
+function formatModelTag(request) {
+  if (!request.autoModel || !request.model) return "";
+  return `[model: ${request.model}${request.effort ? `, effort: ${request.effort}` : ""} (auto)]`;
+}
+
 async function executeAsk(workspaceRoot, request, jobId) {
   const res = await runClaudePrompt(request.prompt, {
     cwd: workspaceRoot,
@@ -199,7 +204,11 @@ async function executeAsk(workspaceRoot, request, jobId) {
     noTools: Boolean(request.noTools),
     edit: Boolean(request.edit)
   });
-  const footer = (request.persist || request.resume) && res.sessionId ? `\n\n[session_id: ${res.sessionId}]` : "";
+  const tags = [
+    formatModelTag(request),
+    (request.persist || request.resume) && res.sessionId ? `[session_id: ${res.sessionId}]` : ""
+  ].filter(Boolean);
+  const footer = tags.length ? `\n\n${tags.join(" ")}` : "";
   const rendered = `${res.text}${footer}`.trim();
   recordCompletedJob(workspaceRoot, jobId, "ask", res, rendered);
   return { res, rendered };
@@ -213,8 +222,10 @@ async function executeReview(workspaceRoot, request, jobId) {
     effort: request.effort,
     noTools: !request.deep
   });
-  recordCompletedJob(workspaceRoot, jobId, kind, res, res.text);
-  return { res, rendered: res.text };
+  const tag = formatModelTag(request);
+  const rendered = tag ? `${res.text}\n\n${tag}`.trim() : res.text;
+  recordCompletedJob(workspaceRoot, jobId, kind, res, rendered);
+  return { res, rendered };
 }
 
 async function executeHandoff(workspaceRoot, request, jobId) {
@@ -454,10 +465,18 @@ function handleTransfer(options, positionals) {
 async function handleAsk(options, positionals) {
   const workspaceRoot = resolveWorkspaceRoot(options.cwd || process.cwd());
   const prompt = positionals.join(" ").trim();
+  const picked = selectClaudeModel({
+    kind: "ask",
+    promptLength: prompt.length,
+    edit: Boolean(options.edit),
+    model: options.model,
+    effort: options.effort
+  });
   const request = {
     prompt,
-    model: options.model,
-    effort: options.effort,
+    model: picked.model,
+    effort: picked.effort,
+    autoModel: picked.auto,
     resume: options.resume,
     persist: Boolean(options.persist || options.resume),
     noTools: Boolean(options["no-tools"]),
@@ -488,11 +507,19 @@ async function handleReview(options, positionals, { adversarial }) {
     return;
   }
   const focus = positionals.join(" ").trim();
+  const picked = selectClaudeModel({
+    kind: adversarial ? "adversarial-review" : "review",
+    promptLength: diff.length,
+    deep: Boolean(options.deep),
+    model: options.model,
+    effort: options.effort
+  });
   const request = {
     adversarial,
     deep: Boolean(options.deep),
-    model: options.model,
-    effort: options.effort,
+    model: picked.model,
+    effort: picked.effort,
+    autoModel: picked.auto,
     prompt: buildReviewPrompt(diff, focus, { adversarial, deep: Boolean(options.deep) })
   };
   const kind = adversarial ? "adversarial-review" : "review";
@@ -535,6 +562,13 @@ async function handleHandoff(options, positionals) {
 
   const testFiles = parseTestList(options.tests);
   const maxFixups = options.fixups !== undefined ? Math.max(0, Number(options.fixups) || 0) : 1;
+  const picked = selectClaudeModel({
+    kind: "handoff",
+    promptLength: requirement.length,
+    edit: true,
+    model: options.model,
+    effort: options.effort
+  });
   const request = {
     prompt: [
       requirement,
@@ -548,8 +582,9 @@ async function handleHandoff(options, positionals) {
     verifyCommand,
     testFiles,
     maxFixups,
-    model: options.model,
-    effort: options.effort
+    model: picked.model,
+    effort: picked.effort,
+    autoModel: picked.auto
   };
 
   if (options.background) {

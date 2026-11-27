@@ -1,7 +1,7 @@
 import process from "node:process";
 import readline from "node:readline";
 
-import { runClaudePrompt } from "./lib/claude.mjs";
+import { runClaudePrompt, selectClaudeModel } from "./lib/claude.mjs";
 import { appendUsageLog, nowIso } from "./lib/state.mjs";
 
 const TOOLS = [
@@ -64,10 +64,17 @@ async function handleRequest(req) {
     }
     try {
       const cwd = args.cwd || process.cwd();
+      const picked = selectClaudeModel({
+        kind: "ask",
+        promptLength: String(args.prompt || "").length,
+        edit: Boolean(args.edit),
+        model: args.model,
+        effort: args.effort
+      });
       const res = await runClaudePrompt(args.prompt, {
         cwd,
-        model: args.model,
-        effort: args.effort,
+        model: picked.model,
+        effort: picked.effort,
         resume: args.resume,
         persist: Boolean(args.persist || args.resume),
         noTools: Boolean(args.no_tools),
@@ -89,8 +96,14 @@ async function handleRequest(req) {
         }
       }
 
-      const sessionFooter =
-        (args.persist || args.resume) && res.sessionId ? `\n\n[session_id: ${res.sessionId}]` : "";
+      const metaParts = [];
+      metaParts.push(
+        `[model: ${picked.model}${picked.effort ? `, effort: ${picked.effort}` : ""}${picked.auto ? " (auto)" : ""}]`
+      );
+      if ((args.persist || args.resume) && res.sessionId) {
+        metaParts.push(`[session_id: ${res.sessionId}]`);
+      }
+      const sessionFooter = `\n\n${metaParts.join(" ")}`;
       const text =
         res.exitCode === 0
           ? `${res.text}${sessionFooter}`
