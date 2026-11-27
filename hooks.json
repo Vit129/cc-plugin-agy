@@ -1,0 +1,18 @@
+{
+  "quota-router": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node ./scripts/quota-hook.mjs pre-invocation",
+        "timeout": 5
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/quota-hook.mjs stop",
+        "timeout": 5
+      }
+    ]
+  }
+}
