@@ -117,23 +117,34 @@ export function readProviderQuota(provider, options = {}) {
   const nowSec = options.nowSec ?? Math.floor(Date.now() / 1000);
   const dir = resolveQuotaDir(env);
   const raw = readJsonSafe(path.join(dir, `${provider}.json`));
+  const native = options.statusLineOnly ? null : readJsonSafe(path.join(dir, `native-${provider}.json`));
   const cooldowns = readCooldowns({ env });
 
   const poolNames = provider === "claude" ? ["default"] : ["gemini", "argon", "3p"];
   const pools = {};
   for (const pool of poolNames) {
-    const rawPool = raw?.pools?.[pool] ?? {};
     const cd = cooldowns[`${provider}:${pool}`] ?? null;
-    pools[pool] = {
-      "5h": evaluateWindow(rawPool["5h"], raw?.captured_at ?? null, cd, nowSec),
-      "7d": evaluateWindow(rawPool["7d"], raw?.captured_at ?? null, cd, nowSec)
-    };
+    const statusLine = Object.fromEntries(["5h", "7d"].map(window =>
+      [window, evaluateWindow(raw?.pools?.[pool]?.[window], raw?.captured_at, cd, nowSec)]));
+    const nativePool = native?.pools?.[pool];
+    const complete = Object.values(statusLine).every(window => window.state === "live");
+    if (!nativePool || complete) {
+      pools[pool] = statusLine;
+      continue;
+    }
+    pools[pool] = Object.fromEntries(Object.entries(statusLine).map(([window, cached]) => {
+      if (!nativePool[window]) return [window, cached];
+      const sampled = evaluateWindow(nativePool[window], native.captured_at, cd, nowSec);
+      const useNative = sampled.state === "live"
+        && (cached.state !== "live" || native.captured_at > raw?.captured_at);
+      return [window, useNative || cached.state === "unknown" ? sampled : cached];
+    }));
   }
 
   return {
     provider,
-    available: Boolean(raw),
-    capturedAt: raw?.captured_at ?? null,
+    available: Boolean(raw || native),
+    capturedAt: Math.max(raw?.captured_at ?? 0, native?.captured_at ?? 0) || null,
     activeModel: raw?.active_model ?? null,
     activePool: raw?.active_pool ?? null,
     pools
