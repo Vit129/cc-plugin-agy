@@ -1,0 +1,25 @@
+README.md
+  s_162efa8565b211::t_40063c546c4b2a 15
+scripts/lib/quota-route.mjs
+  s_162efa8565b211::t_f9949e7edf9d23 24-28
+scripts/quota-hook.mjs
+  s_162efa8565b211::t_49338d1a50d1d3 6,9-10,14-17,19-20,23
+tests/claude-companion.test.mjs
+  s_162efa8565b211::t_9d64740278a898 63,68-69,75-79,81-87,90-93,98-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a6f1baa3db8b80a72320a32e6fd6c9ecac18e7e4",
+  "prompts": {},
+  "sessions": {
+    "s_162efa8565b211": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82c4c7c6-7cc8-46c6-ab2d-fee35b16dcf2",
+        "model": "unknown"
+      },
+      "human_author": "Vit129 <vitosk129@gmail.com>"
+    }
+  }
+}
