@@ -1,0 +1,36 @@
+scripts/ask-claude-mcp.mjs
+  s_b3a04804e19838::t_9bda3cf5422e80 5,23-24,69-74
+scripts/lib/delegation-route.mjs
+  s_b3a04804e19838::t_9bda3cf5422e80 1-28
+scripts/claude-companion.mjs
+  s_b3a04804e19838::t_dcd19767b610bb 17,395,397,402,672-675
+  s_b3a04804e19838::t_9bda3cf5422e80 51-56,473-480,484-485,527-528,582
+scripts/quota-hook.mjs
+  s_b3a04804e19838::t_dcd19767b610bb 3,50
+  s_b3a04804e19838::t_9bda3cf5422e80 5-6,10-11,13-21,27-29,33
+README.md
+  s_b3a04804e19838::t_31544bb037eff9 14-17
+tests/quota-route.test.mjs
+  s_b3a04804e19838::t_656c2c0ee92c68 36-81
+  s_b3a04804e19838::t_64c9394ae0c894 1-35
+CONTEXT.md
+  s_b3a04804e19838::t_31544bb037eff9 1-5
+tests/claude-companion.test.mjs
+  s_b3a04804e19838::t_656c2c0ee92c68 10,63,65,67,70-90,116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fbe8165c6a1eb305695d48be10ab82893b97f7a0",
+  "prompts": {},
+  "sessions": {
+    "s_b3a04804e19838": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a21fea-18ae-7073-b1a0-913d03334c3d",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "Vit129 <vitosk129@gmail.com>"
+    }
+  }
+}
