@@ -1,3 +1,5 @@
+> **Moved.** This plugin now lives in [Vit129/agy-plugin-cc](https://github.com/Vit129/agy-plugin-cc) under [`plugins/cc-for-agy`](https://github.com/Vit129/agy-plugin-cc/tree/main/plugins/cc-for-agy) (v1.9.0+). Install with `agy plugin install <agy-plugin-cc>/plugins/cc-for-agy` or `npm run setup` in that repo. This repository is archived.
+
 # cc-plugin-agy
 
 Antigravity (`agy`) native plugin (`v0.4.1`) for symmetric delegation, cold/adversarial code review, test-verified handoff, session transfer, background jobs, and shared 5h/7d quota-aware routing with Claude Code CLI (`claude -p`).
