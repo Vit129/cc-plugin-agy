@@ -2,6 +2,7 @@ import process from "node:process";
 import readline from "node:readline";
 
 import { runClaudePrompt, selectClaudeModel } from "./lib/claude.mjs";
+import { checkClaudeRoute } from "./lib/delegation-route.mjs";
 import { appendUsageLog, nowIso } from "./lib/state.mjs";
 
 const TOOLS = [
@@ -19,7 +20,8 @@ const TOOLS = [
         resume: { type: "string", description: "Session ID from a previous persisted ask_claude call to continue." },
         persist: { type: "boolean", description: "Keep session on disk and return session_id for follow-up turns." },
         no_tools: { type: "boolean", description: "Disable all tools (lowest token overhead when diff is in prompt)." },
-        edit: { type: "boolean", description: "Allow file edits (default false / read-only)." }
+        edit: { type: "boolean", description: "Allow file edits (default false / read-only)." },
+        route: { type: "string", enum: ["auto", "off"], default: "auto", description: "Apply cached quota routing or explicitly bypass it." }
       },
       required: ["prompt"]
     }
@@ -64,6 +66,12 @@ async function handleRequest(req) {
     }
     try {
       const cwd = args.cwd || process.cwd();
+      if (!String(args.prompt ?? "").trim()) throw new Error("Prompt must not be empty.");
+      const diversion = checkClaudeRoute(cwd, "mcp:ask_claude", args.route);
+      if (diversion) {
+        send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: diversion.message }], isError: true } });
+        return;
+      }
       const picked = selectClaudeModel({
         kind: "ask",
         promptLength: String(args.prompt || "").length,

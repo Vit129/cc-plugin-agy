@@ -1,61 +1,36 @@
 import fs from "node:fs";
-import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
-import { classifyQuotaError, readAllQuota, recordCooldown, resolveQuotaDir } from "./lib/quota-state.mjs";
-
-const LOW_HEADROOM_PCT = 15;
-const CLAUDE_MIN_HEADROOM_PCT = 20;
+import { autoRoute, DIVERSION_PREFIX, recordDiversion } from "./lib/delegation-route.mjs";
+import { classifyQuotaError, readAllQuota, recordCooldown } from "./lib/quota-state.mjs";
 
 export function handlePreInvocation(payload = {}, options = {}) {
   const env = options.env ?? process.env;
+  const input = typeof payload.lastUserInput === "string" ? payload.lastUserInput.trim() : "";
+  if (env.CC_PLUGIN_AGY_ROUTE === "off" || !input || input.startsWith("/")) return {};
   const nowSec = options.nowSec ?? Math.floor(Date.now() / 1000);
-  const quota = readAllQuota({ env, nowSec });
+  const decision = autoRoute("agy", { env, nowSec, model: payload.modelName });
+  if (decision.target === "agy") return {};
 
-  const agyPool = quota.agy.activePool || "gemini";
-  const agy5h = quota.agy.pools[agyPool]?.["5h"]?.effectiveRemainingPct;
-  const claude5h = quota.claude.pools.default["5h"]?.effectiveRemainingPct;
-
-  if (
-    typeof agy5h === "number" &&
-    agy5h < LOW_HEADROOM_PCT &&
-    (claude5h === null || claude5h >= CLAUDE_MIN_HEADROOM_PCT)
-  ) {
-    // Nudge at most once per conversation
-    const convId = String(payload.conversationId || "default").replace(/[^a-zA-Z0-9_-]/g, "_");
-    const markerDir = path.join(resolveQuotaDir(env), "nudged");
-    const markerFile = path.join(markerDir, `${convId}.flag`);
-    if (fs.existsSync(markerFile)) {
-      return {};
-    }
-    try {
-      fs.mkdirSync(markerDir, { recursive: true });
-      fs.writeFileSync(markerFile, `${nowSec}\n`, "utf8");
-    } catch {
-      // Non-fatal
-    }
-    return {
-      injectSteps: [
-        {
-          systemMessage: {
-            systemMessage: `Note: agy (${agyPool}) 5h quota is low (${agy5h}% remaining) while Claude has headroom (${claude5h ?? "unknown"}% remaining). Consider delegating cold reviews or bounded sub-tasks to Claude via ask_claude.`
-          }
-        }
-      ]
-    };
-  }
-
-  return {};
+  const cwd = payload.workspacePaths?.[0] || process.cwd();
+  const { message } = recordDiversion(cwd, "hook:PreInvocation", "agy", decision, env);
+  return {
+    terminationBehavior: "terminate",
+    injectSteps: [{ errorMessage: { userMessage: message } }]
+  };
 }
 
 export function handleStop(payload = {}, options = {}) {
   const env = options.env ?? process.env;
   const nowSec = options.nowSec ?? Math.floor(Date.now() / 1000);
-  if (payload.terminationReason === "ERROR" && classifyQuotaError(payload.error || "")) {
+  const error = String(payload.error ?? "");
+  if (String(payload.terminationReason).toUpperCase() === "ERROR"
+    && !error.includes(DIVERSION_PREFIX) && classifyQuotaError(error)) {
     const quota = readAllQuota({ env, nowSec });
     const pool = quota.agy.activePool || "gemini";
     try {
-      recordCooldown("agy", pool, { reason: payload.error, nowSec, env });
+      recordCooldown("agy", pool, { reason: error, nowSec, env });
     } catch {
       // Non-fatal
     }
@@ -72,7 +47,7 @@ function readStdinSync() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   const mode = process.argv[2];
   const payload = readStdinSync();
   const out =
