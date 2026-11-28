@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { buildClaudeArgs, parseClaudeJsonOutput, RECURSION_GUARD_ENV, runClaudePrompt, selectClaudeModel } from "../scripts/lib/claude.mjs";
 import { handlePreInvocation, handleStop } from "../scripts/quota-hook.mjs";
+import { resolveStateDir } from "../scripts/lib/state.mjs";
 import { readAllQuota } from "../scripts/lib/quota-state.mjs";
 
 test("buildClaudeArgs supports default no-persistence, persist, resume, noTools, and edit", () => {
@@ -59,40 +60,34 @@ test("runClaudePrompt blocks recursive calls when CC_PLUGIN_AGY_ACTIVE=1", async
   );
 });
 
-test("quota-hook PreInvocation nudges once when agy is low and claude has headroom, Stop records cooldown", () => {
+test("[TC-QAR-04][BE-IT] PreInvocation stops a critical agy turn and leaves native commands available", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-plugin-agy-hook-"));
-  const env = { AI_QUOTA_DIR: dir };
+  const env = { AI_QUOTA_DIR: dir, AGENT_USAGE_STATE_DIR: dir, PLUGIN_DATA: dir };
   const now = 1_800_000_000;
+  const opts = { env, nowSec: now };
 
   try {
-    fs.writeFileSync(
-      path.join(dir, "agy.json"),
-      JSON.stringify({
-        schema_version: 1,
-        provider: "agy",
-        captured_at: now - 10,
-        active_pool: "gemini",
-        pools: { gemini: { "5h": { used_pct: 90, remaining_pct: 10, resets_at: now + 1000 } } }
-      })
-    );
-    fs.writeFileSync(
-      path.join(dir, "claude.json"),
-      JSON.stringify({
-        schema_version: 1,
-        provider: "claude",
-        captured_at: now - 10,
-        pools: { default: { "5h": { used_pct: 20, remaining_pct: 80, resets_at: now + 1000 } } }
-      })
-    );
+    for (const [provider, pool, remaining] of [["agy", "gemini", 10], ["claude", "default", 80]]) {
+      const window = { remaining_pct: remaining, resets_at: now + 1000 };
+      fs.writeFileSync(path.join(dir, `${provider}.json`), JSON.stringify({
+        captured_at: now - 10, pools: { [pool]: { "5h": window, "7d": window } }
+      }));
+    }
+    const request = { lastUserInput: "Review the changes", modelName: "gemini-flash", workspacePaths: [dir] };
+    const outcome = handlePreInvocation(request, opts);
+    assert.equal(outcome.terminationBehavior, "terminate");
+    const message = outcome.injectSteps[0].errorMessage.userMessage;
+    assert.match(message, /diverted to Claude.*agy 5h quota is critical/);
+    assert.deepEqual(handlePreInvocation({ ...request, lastUserInput: "/usage" }, opts), {});
+    assert.deepEqual(handlePreInvocation(request, { ...opts, env: { ...env, CC_PLUGIN_AGY_ROUTE: "off" } }), {});
+    const entry = JSON.parse(fs.readFileSync(path.join(resolveStateDir(dir, env), "usage.jsonl"), "utf8"));
+    assert.equal(entry.kind, "hook:PreInvocation");
+    assert.equal(entry.status, "diverted");
 
-    const first = handlePreInvocation({ conversationId: "conv-1" }, { env, nowSec: now });
-    assert.equal(first.injectSteps?.length, 1);
-    const second = handlePreInvocation({ conversationId: "conv-1" }, { env, nowSec: now + 5 });
-    assert.deepEqual(second, {});
-
-    handleStop({ terminationReason: "ERROR", error: "429 quota exhausted" }, { env, nowSec: now + 10 });
-    const quota = readAllQuota({ env, nowSec: now + 15 });
-    assert.equal(quota.agy.pools.gemini["5h"].state, "exhausted");
+    handleStop({ terminationReason: "error", error: message }, opts);
+    assert.equal(readAllQuota(opts).agy.pools.gemini["5h"].state, "live");
+    handleStop({ terminationReason: "error", error: "429 quota exhausted" }, opts);
+    assert.equal(readAllQuota(opts).agy.pools.gemini["5h"].state, "exhausted");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -118,6 +113,7 @@ test("ask-claude-mcp responds to initialize and tools/list including resume and 
   assert.equal(tool.name, "ask_claude");
   assert.ok(tool.inputSchema.properties.resume);
   assert.ok(tool.inputSchema.properties.persist);
+  assert.deepEqual(tool.inputSchema.properties.route.enum, ["auto", "off"]);
 });
 
 test("selectClaudeModel picks by task size when model is omitted and respects explicit/env overrides", () => {

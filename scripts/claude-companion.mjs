@@ -14,6 +14,7 @@ import {
   runHandoffLoop
 } from "./lib/handoff.mjs";
 import { decideRoute, readAllQuota } from "./lib/quota-state.mjs";
+import { autoRoute, checkClaudeRoute } from "./lib/delegation-route.mjs";
 import {
   appendUsageLog,
   formatUsage,
@@ -47,7 +48,12 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (BOOLEAN_FLAGS.has(key)) {
+      if (key.startsWith("route=")) {
+        options.route = key.slice("route=".length);
+      } else if (key === "route") {
+        if (!argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error("Missing value for --route.");
+        options.route = argv[++i];
+      } else if (BOOLEAN_FLAGS.has(key)) {
         options[key] = true;
       } else if (i + 1 < argv.length) {
         const val = argv[++i];
@@ -386,12 +392,14 @@ function handleRoute(options) {
     min5h: options["min-5h"] ? Number(options["min-5h"]) : undefined,
     min7d: options["min-7d"] ? Number(options["min-7d"]) : undefined
   });
+  const auto = autoRoute("claude", { model: options.model });
   if (options.json) {
-    console.log(JSON.stringify(decision, null, 2));
+    console.log(JSON.stringify({ ...decision, autoRoute: auto }, null, 2));
     return;
   }
   console.log(`Selected: ${decision.selected ? `${decision.selected.provider}:${decision.selected.pool}` : "none"}`);
   console.log(`Reason: ${decision.reason}`);
+  console.log(`Auto-Route agy→Claude: ${auto.target === "claude" ? "allowed" : "diverted"} · ${auto.reason}`);
 }
 
 function handleDoctor(options) {
@@ -462,9 +470,19 @@ function handleTransfer(options, positionals) {
   }
 }
 
+function diverted(workspaceRoot, kind, options) {
+  const event = checkClaudeRoute(workspaceRoot, kind, options.route);
+  if (!event) return false;
+  console.log(options.json ? JSON.stringify(event, null, 2) : event.message);
+  process.exitCode = 1;
+  return true;
+}
+
 async function handleAsk(options, positionals) {
   const workspaceRoot = resolveWorkspaceRoot(options.cwd || process.cwd());
   const prompt = positionals.join(" ").trim();
+  if (!prompt) throw new Error("Prompt must not be empty.");
+  if (diverted(workspaceRoot, "ask", options)) return;
   const picked = selectClaudeModel({
     kind: "ask",
     promptLength: prompt.length,
@@ -506,6 +524,8 @@ async function handleReview(options, positionals, { adversarial }) {
     console.log("No git diff to review.");
     return;
   }
+  const kind = adversarial ? "adversarial-review" : "review";
+  if (diverted(workspaceRoot, kind, options)) return;
   const focus = positionals.join(" ").trim();
   const picked = selectClaudeModel({
     kind: adversarial ? "adversarial-review" : "review",
@@ -522,7 +542,6 @@ async function handleReview(options, positionals, { adversarial }) {
     autoModel: picked.auto,
     prompt: buildReviewPrompt(diff, focus, { adversarial, deep: Boolean(options.deep) })
   };
-  const kind = adversarial ? "adversarial-review" : "review";
   if (options.background) {
     enqueueBackground(workspaceRoot, kind, request, options);
     return;
@@ -560,6 +579,7 @@ async function handleHandoff(options, positionals) {
     throw new Error("Could not detect verification command; pass --verify <cmd>.");
   }
 
+  if (diverted(workspaceRoot, "handoff", options)) return;
   const testFiles = parseTestList(options.tests);
   const maxFixups = options.fixups !== undefined ? Math.max(0, Number(options.fixups) || 0) : 1;
   const picked = selectClaudeModel({
@@ -649,10 +669,10 @@ async function main() {
           "  node scripts/claude-companion.mjs cancel [job-id] [--json]",
           "  node scripts/claude-companion.mjs route [--preferred <claude|agy>] [--model <name>] [--json]",
           "  node scripts/claude-companion.mjs transfer [--notes <text>] [notes]",
-          "  node scripts/claude-companion.mjs ask [--model <name>] [--effort <low|medium|high>] [--resume <id>] [--persist] [--no-tools] [--edit] [--background] <prompt>",
-          "  node scripts/claude-companion.mjs review [--staged] [--base <ref>] [--deep] [--model <name>] [--background] [focus]",
-          "  node scripts/claude-companion.mjs adversarial-review [--staged] [--base <ref>] [--deep] [--model <name>] [--background] [focus]",
-          "  node scripts/claude-companion.mjs handoff [--verify <cmd>] [--tests <a,b>] [--fixups <n>] [--model <name>] [--background] <requirement>"
+          "  node scripts/claude-companion.mjs ask [--route auto|off] [--model <name>] [--effort <low|medium|high>] [--resume <id>] [--persist] [--no-tools] [--edit] [--background] <prompt>",
+          "  node scripts/claude-companion.mjs review [--route auto|off] [--staged] [--base <ref>] [--deep] [--model <name>] [--background] [focus]",
+          "  node scripts/claude-companion.mjs adversarial-review [--route auto|off] [--staged] [--base <ref>] [--deep] [--model <name>] [--background] [focus]",
+          "  node scripts/claude-companion.mjs handoff [--route auto|off] [--verify <cmd>] [--tests <a,b>] [--fixups <n>] [--model <name>] [--background] <requirement>"
         ].join("\n")
       );
   }

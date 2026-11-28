@@ -14,5 +14,14 @@
         "timeout": 5
       }
     ]
+  },
+  "agent-usage-dashboard": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "if [ -x \"$HOME/.local/bin/agent-usage\" ]; then \"$HOME/.local/bin/agent-usage\" on-provider-start agy || true; fi",
+        "timeout": 5
+      }
+    ]
   }
 }
