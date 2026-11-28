@@ -60,29 +60,46 @@ test("runClaudePrompt blocks recursive calls when CC_PLUGIN_AGY_ACTIVE=1", async
   );
 });
 
-test("[TC-QAR-04][BE-IT] PreInvocation stops a critical agy turn and leaves native commands available", () => {
+test("[TC-QAR-04][BE-IT] PreInvocation never blocks ordinary agy prompts; it only diverts Claude delegations", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-plugin-agy-hook-"));
   const env = { AI_QUOTA_DIR: dir, AGENT_USAGE_STATE_DIR: dir, PLUGIN_DATA: dir };
   const now = 1_800_000_000;
   const opts = { env, nowSec: now };
-
-  try {
-    for (const [provider, pool, remaining] of [["agy", "gemini", 10], ["claude", "default", 80]]) {
+  const seed = (agy, claude) => {
+    for (const [provider, pool, remaining] of [["agy", "gemini", agy], ["claude", "default", claude]]) {
       const window = { remaining_pct: remaining, resets_at: now + 1000 };
       fs.writeFileSync(path.join(dir, `${provider}.json`), JSON.stringify({
         captured_at: now - 10, pools: { [pool]: { "5h": window, "7d": window } }
       }));
     }
+  };
+
+  try {
+    // agy critical, Claude healthy: ordinary prompts must still run.
+    seed(10, 80);
     const request = { lastUserInput: "Review the changes", modelName: "gemini-flash", workspacePaths: [dir] };
-    const outcome = handlePreInvocation(request, opts);
+    assert.deepEqual(handlePreInvocation(request, opts), {});
+    assert.deepEqual(handlePreInvocation({ ...request, lastUserInput: "ask claude to review this" }, opts), {});
+
+    // Claude critical, agy healthy: a delegation to Claude is short-circuited, ordinary prompts and slash commands are not.
+    seed(80, 10);
+    const delegation = { ...request, lastUserInput: "ask claude to review the changes" };
+    const outcome = handlePreInvocation(delegation, opts);
     assert.equal(outcome.terminationBehavior, "terminate");
     const message = outcome.injectSteps[0].errorMessage.userMessage;
-    assert.match(message, /diverted to Claude.*agy 5h quota is critical/);
-    assert.deepEqual(handlePreInvocation({ ...request, lastUserInput: "/usage" }, opts), {});
-    assert.deepEqual(handlePreInvocation(request, { ...opts, env: { ...env, CC_PLUGIN_AGY_ROUTE: "off" } }), {});
+    assert.match(message, /diverted to agy.*claude 5h quota is critical/);
+    assert.deepEqual(handlePreInvocation(request, opts), {});
+    assert.deepEqual(handlePreInvocation({ ...delegation, lastUserInput: "/usage" }, opts), {});
+    assert.deepEqual(handlePreInvocation(delegation, { ...opts, env: { ...env, CC_PLUGIN_AGY_ROUTE: "off" } }), {});
     const entry = JSON.parse(fs.readFileSync(path.join(resolveStateDir(dir, env), "usage.jsonl"), "utf8"));
     assert.equal(entry.kind, "hook:PreInvocation");
     assert.equal(entry.status, "diverted");
+
+    // Persistent off-switch works without the launch-time env var.
+    fs.writeFileSync(path.join(dir, "route-off"), "");
+    assert.deepEqual(handlePreInvocation(delegation, opts), {});
+    fs.rmSync(path.join(dir, "route-off"));
+    assert.equal(handlePreInvocation(delegation, opts).terminationBehavior, "terminate");
 
     handleStop({ terminationReason: "error", error: message }, opts);
     assert.equal(readAllQuota(opts).agy.pools.gemini["5h"].state, "live");

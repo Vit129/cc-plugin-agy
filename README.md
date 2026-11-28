@@ -12,7 +12,7 @@ Antigravity (`agy`) native plugin (`v0.4.0`) for symmetric delegation, cold/adve
 - **Background Jobs & Usage Ledger:** `status`, `result`, `cancel`, and `usage.jsonl` per workspace (`$PLUGIN_DATA`).
 - **Loop guard:** sets `CC_PLUGIN_AGY_ACTIVE=1` to block recursive `agy -> claude -> agy` calls.
 - **Quota Auto-Route:** `ask`, `review`, `adversarial-review`, and `handoff` default to `--route auto`. `ask_claude` accepts `route: "auto"`. If Claude is critical and both agy windows are above Low, they return a diversion reason before launching Claude. Use `--route off` or `route: "off"` to override.
-- **Shared quota hooks:** `PreInvocation` can stop an ordinary agy turn before the model runs when agy is critical and Claude has headroom. Launch agy with `CC_PLUGIN_AGY_ROUTE=off` to bypass this hook. Slash commands such as `/usage` remain available. `Stop` records provider cooldowns.
+- **Shared quota hooks:** `PreInvocation` never blocks an ordinary agy prompt. It only stops a prompt that delegates to Claude (for example "ask claude ...") when Claude is critical and agy has headroom. Turn it off with `CC_PLUGIN_AGY_ROUTE=off` at agy launch, or at any time by creating an empty `route-off` file in the Agent Usage state directory (`$AGENT_USAGE_STATE_DIR`, default `~/.local/state/agent-usage`). Slash commands such as `/usage` always remain available. `Stop` records provider cooldowns.
 
 Auto-Route uses the shared status-line/Agent Usage cache and Agent Usage Critical and Low thresholds. Both providers need fresh 5h/7d windows. Diversions are recorded in `usage.jsonl`. Agent Usage displays both delegation directions under **Plan usage**.
 

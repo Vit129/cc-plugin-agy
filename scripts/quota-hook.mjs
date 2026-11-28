@@ -3,18 +3,24 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { autoRoute, DIVERSION_PREFIX, recordDiversion } from "./lib/delegation-route.mjs";
+import { isRouteOffPersisted } from "./lib/quota-route.mjs";
 import { classifyQuotaError, readAllQuota, recordCooldown } from "./lib/quota-state.mjs";
+
+const DELEGATES_TO_CLAUDE = /\b(ask_claude|claude-companion)\b|\b(ask|delegate (this )?to|hand ?off to|use) claude\b/i;
 
 export function handlePreInvocation(payload = {}, options = {}) {
   const env = options.env ?? process.env;
   const input = typeof payload.lastUserInput === "string" ? payload.lastUserInput.trim() : "";
-  if (env.CC_PLUGIN_AGY_ROUTE === "off" || !input || input.startsWith("/")) return {};
+  if (env.CC_PLUGIN_AGY_ROUTE === "off" || !input || input.startsWith("/") || isRouteOffPersisted(env)) return {};
+  // Ordinary agy prompts are never blocked: agy running out of quota is not a reason to stop agy's own work.
+  // Only a prompt that delegates to Claude is short-circuited, and only when Claude is critical and agy healthy.
+  if (!DELEGATES_TO_CLAUDE.test(input)) return {};
   const nowSec = options.nowSec ?? Math.floor(Date.now() / 1000);
-  const decision = autoRoute("agy", { env, nowSec, model: payload.modelName });
-  if (decision.target === "agy") return {};
+  const decision = autoRoute("claude", { env, nowSec });
+  if (decision.target === "claude") return {};
 
   const cwd = payload.workspacePaths?.[0] || process.cwd();
-  const { message } = recordDiversion(cwd, "hook:PreInvocation", "agy", decision, env);
+  const { message } = recordDiversion(cwd, "hook:PreInvocation", "claude", decision, env);
   return {
     terminationBehavior: "terminate",
     injectSteps: [{ errorMessage: { userMessage: message } }]
